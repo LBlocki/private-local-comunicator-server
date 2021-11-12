@@ -1,10 +1,15 @@
 package com.lblocki.privatecommunicatorserver.config;
 
 import com.lblocki.privatecommunicatorserver.infrastructure.UserRepository;
-import com.lblocki.privatecommunicatorserver.security.filter.ApplicationCorsFilter;
-import com.lblocki.privatecommunicatorserver.security.provider.UsernamePasswordAuthenticationProvider;
+import com.lblocki.privatecommunicatorserver.security.filter.ApplicationRestCorsFilter;
+import com.lblocki.privatecommunicatorserver.security.filter.UsernamePasswordLoginAuthenticationFilter;
+import com.lblocki.privatecommunicatorserver.security.provider.AccessTokenAuthenticationProvider;
+import com.lblocki.privatecommunicatorserver.security.provider.UsernamePasswordLoginAuthenticationProvider;
 import com.lblocki.privatecommunicatorserver.security.userdetails.DbUserDetailsService;
+import com.lblocki.privatecommunicatorserver.security.utils.RestAccessDeniedHandler;
+import com.lblocki.privatecommunicatorserver.security.utils.RestAuthenticationEntryPointHandler;
 import com.lblocki.privatecommunicatorserver.security.utils.SecurityUtils;
+import com.lblocki.privatecommunicatorserver.usecase.JWTTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.val;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +25,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter;
 import org.springframework.web.filter.CharacterEncodingFilter;
 
@@ -28,14 +34,16 @@ import java.util.HashMap;
 
 @Configuration
 @RequiredArgsConstructor
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
+public class HttpSecurityConfig extends WebSecurityConfigurerAdapter {
 
     private final UserRepository userRepository;
+    private final JWTTokenService jwtTokenService;
 
     @Override
     protected void configure(AuthenticationManagerBuilder auth) {
         auth
-                .authenticationProvider(usernamePasswordAuthenticationProvider());
+                .authenticationProvider(usernamePasswordLoginAuthenticationProvider())
+                .authenticationProvider(accessTokenAuthenticationProvider());
     }
 
     @Override
@@ -48,25 +56,25 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .contentSecurityPolicy("script-src 'self'")
                 .and()
                 .and()
-                .sessionManagement()
-                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                .maximumSessions(3)
-                .and()
-                .sessionFixation().newSession()
-                .and()
+                .csrf().disable()
                 .httpBasic().disable()
                 .formLogin().disable()
-                .logout()
-                .logoutUrl(SecurityUtils.LOGOUT_HTTP_PATH)
-                .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID")
+                .logout().disable()
+                .exceptionHandling()
+                .authenticationEntryPoint(restAuthenticationEntryPointHandler())
+                .and()
+                .exceptionHandling()
+                .accessDeniedHandler(restAccessDeniedHandler())
                 .and()
                 .authorizeRequests()
                 .mvcMatchers(HttpMethod.POST, SecurityUtils.REGISTRATION_HTTP_PATH).permitAll()
-                .anyRequest().authenticated()
+                .antMatchers(HttpMethod.GET, SecurityUtils.HTTP_UPGRADE_PATH).permitAll()
+                .anyRequest().permitAll()
                 .and()
                 .addFilterBefore(applicationCorsFilter(), WebAsyncManagerIntegrationFilter.class)
-                .addFilterBefore(characterEncodingFilter(), WebAsyncManagerIntegrationFilter.class);
+                .addFilterBefore(usernamePasswordLoginAuthenticationFilter(), BasicAuthenticationFilter.class)
+                .addFilterBefore(characterEncodingFilter(), WebAsyncManagerIntegrationFilter.class)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.NEVER));
     }
 
     @Override
@@ -90,21 +98,40 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     }
 
     @Bean
-    public AuthenticationProvider usernamePasswordAuthenticationProvider() {
-        return new UsernamePasswordAuthenticationProvider(passwordEncoder(), userDetailsService());
+    protected RestAuthenticationEntryPointHandler restAuthenticationEntryPointHandler() {
+        return new RestAuthenticationEntryPointHandler();
     }
 
     @Bean
-    public ApplicationCorsFilter applicationCorsFilter() {
-        return new ApplicationCorsFilter();
+    protected RestAccessDeniedHandler restAccessDeniedHandler() {
+        return new RestAccessDeniedHandler();
     }
 
     @Bean
-    public CharacterEncodingFilter characterEncodingFilter() {
+    protected AuthenticationProvider usernamePasswordLoginAuthenticationProvider() {
+        return new UsernamePasswordLoginAuthenticationProvider(passwordEncoder(), userDetailsService());
+    }
+
+    @Bean
+    protected AuthenticationProvider accessTokenAuthenticationProvider() {
+        return new AccessTokenAuthenticationProvider(jwtTokenService, userDetailsService());
+    }
+
+    @Bean
+    protected ApplicationRestCorsFilter applicationCorsFilter() {
+        return new ApplicationRestCorsFilter();
+    }
+
+    @Bean
+    protected UsernamePasswordLoginAuthenticationFilter usernamePasswordLoginAuthenticationFilter() throws Exception {
+        return new UsernamePasswordLoginAuthenticationFilter(authenticationManager(), jwtTokenService);
+    }
+
+    @Bean
+    protected CharacterEncodingFilter characterEncodingFilter() {
         val filter = new CharacterEncodingFilter();
         filter.setEncoding(StandardCharsets.UTF_8.name());
         filter.setForceEncoding(true);
         return filter;
     }
-
 }

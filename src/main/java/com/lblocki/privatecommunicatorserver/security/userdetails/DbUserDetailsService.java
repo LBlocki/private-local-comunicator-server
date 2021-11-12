@@ -17,7 +17,7 @@ public class DbUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(final String username) throws UsernameNotFoundException {
         try {
             Validate.notBlank(username);
         } catch (Exception t) {

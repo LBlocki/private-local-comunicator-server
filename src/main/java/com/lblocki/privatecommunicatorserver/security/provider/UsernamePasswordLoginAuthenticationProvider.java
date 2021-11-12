@@ -11,14 +11,16 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
+
 @RequiredArgsConstructor
-public class UsernamePasswordAuthenticationProvider implements AuthenticationProvider {
+public class UsernamePasswordLoginAuthenticationProvider implements AuthenticationProvider {
 
     private final PasswordEncoder passwordEncoder;
     private final UserDetailsService userDetailsService;
 
     @Override
-    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+    public Authentication authenticate(final Authentication authentication) throws AuthenticationException {
         String username = authentication.getName();
         String password = (String) authentication.getCredentials();
 
@@ -26,14 +28,14 @@ public class UsernamePasswordAuthenticationProvider implements AuthenticationPro
 
         if (passwordEncoder.matches(password, user.getPassword())) {
             ((User) user).eraseCredentials();
-            return new LoginAuthenticationToken(username, null);
+            return new LoginAuthenticationToken(username, null, List.of());
         }
         ((User) user).eraseCredentials();
         throw new BadCredentialsException("Invalid credentials");
     }
 
     @Override
-    public boolean supports(Class<?> aClass) {
+    public boolean supports(final Class<?> aClass) {
         return LoginAuthenticationToken.class.equals(aClass);
     }
 }

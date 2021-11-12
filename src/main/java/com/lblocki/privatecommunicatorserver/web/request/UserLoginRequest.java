@@ -1,4 +1,4 @@
-package com.lblocki.privatecommunicatorserver.web;
+package com.lblocki.privatecommunicatorserver.web.request;
 
 import lombok.Builder;
 import lombok.Value;
