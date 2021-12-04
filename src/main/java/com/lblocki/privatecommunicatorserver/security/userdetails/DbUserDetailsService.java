@@ -33,7 +33,7 @@ public class DbUserDetailsService implements UserDetailsService {
     private org.springframework.security.core.userdetails.User convertToSecurityUser(@NonNull final User user) {
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
-                user.getPassword(),
+                user.getWrappedSymmetricKey(),
                 true,
                 true,
                 true,

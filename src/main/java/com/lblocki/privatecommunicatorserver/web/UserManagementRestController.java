@@ -8,9 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Stream;
@@ -32,7 +30,7 @@ public class UserManagementRestController {
                     orElseThrow(() -> new IllegalArgumentException("Register request validation failed"));
 
             log.debug("Registering new user " + request.getUsername());
-            userManagementService.registerUser(request.getUsername(), request.getPassword());
+            userManagementService.registerUser(request);
 
         } catch (IllegalArgumentException ex) {
             log.debug("Error. Invalid request to register user", ex);
@@ -46,13 +44,31 @@ public class UserManagementRestController {
         }
     }
 
+    @GetMapping(SecurityUtils.LOGIN_IV_FOR_PASSWORD)
+    public String getIvForWrappedSymmetricKey(@PathVariable(name = "username") final String username) {
+        try {
+            return userManagementService.getUserIvForWrappedSymmetricKey(username);
+        } catch (IllegalArgumentException ex) {
+            log.debug("Error. Invalid request to find iv for wrapped symmetric key for username {}", username, ex);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid request");
+        }
+        catch (Exception ex) {
+            log.debug("Error. Unexpected exception has occurred", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error. Please contact the administrators");
+        }
+    }
+
     private boolean validateRegisterRequest(final UserRegisterRequest request) {
 
         try {
 
             Validate.notNull(request);
             Validate.notBlank(request.getUsername());
-            Validate.notBlank(request.getPassword());
+            Validate.notBlank(request.getExportedPublicKey());
+            Validate.notBlank(request.getIvForPrivateKey());
+            Validate.notBlank(request.getIvForSymmetricKey());
+            Validate.notBlank(request.getWrappedPrivateKey());
+            Validate.notBlank(request.getWrappedSymmetricKey());
 
             return true;
 

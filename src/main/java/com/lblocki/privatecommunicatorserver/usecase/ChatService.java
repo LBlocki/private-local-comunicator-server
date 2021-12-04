@@ -50,6 +50,11 @@ public class ChatService {
         messageRepository.saveAll(messages);
     }
 
+    public User fetchCurrentUser() {
+        final String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("Failed to find user " + username));
+    }
+
     public Collection<Room> fetchAllRooms() {
         final String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return roomRepository.findAllByUsers_username(username);

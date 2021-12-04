@@ -4,10 +4,7 @@ import com.lblocki.privatecommunicatorserver.domain.Message;
 import com.lblocki.privatecommunicatorserver.domain.Room;
 import com.lblocki.privatecommunicatorserver.domain.User;
 import com.lblocki.privatecommunicatorserver.usecase.ChatService;
-import com.lblocki.privatecommunicatorserver.web.dto.MessageDTO;
-import com.lblocki.privatecommunicatorserver.web.dto.RoomDTO;
-import com.lblocki.privatecommunicatorserver.web.dto.RoomMessagesDTO;
-import com.lblocki.privatecommunicatorserver.web.dto.UserDTO;
+import com.lblocki.privatecommunicatorserver.web.dto.*;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,10 +47,10 @@ public class ChatWebSocketController {
         simpMessagingTemplate.convertAndSendToUser(username, "/exchange/chat.private.messages.read", roomId);
     }
 
-    @SubscribeMapping("/chat.private.fetch.room.messages.list")
-    public Collection<RoomMessagesDTO> fetchRoomMessagesList() {
+    @SubscribeMapping("/chat.private.fetch.initial.data")
+    public InitialDataDTO fetchRoomMessagesList() {
         final Collection<Room> rooms = chatService.fetchAllRooms();
-        final Collection<RoomMessagesDTO> roomMessages = chatService.fetchAllMessages().stream()
+        final Collection<RoomMessagesDTO> roomMessagesList = chatService.fetchAllMessages().stream()
                 .collect(Collectors.groupingBy(Message::getRoom))
                 .entrySet()
                 .stream()
@@ -65,12 +62,12 @@ public class ChatWebSocketController {
                         .build())
                 .collect(Collectors.toList());
 
-        final List<Long> roomIdsWithMessages = roomMessages.stream()
+        final List<Long> roomIdsWithMessages = roomMessagesList.stream()
                 .map(RoomMessagesDTO::getRoom)
                 .map(RoomDTO::getId)
                 .collect(Collectors.toList());
 
-        roomMessages.addAll(rooms.stream()
+        roomMessagesList.addAll(rooms.stream()
                 .filter(room -> !roomIdsWithMessages.contains(room.getId()))
                 .map(room -> RoomMessagesDTO.builder()
                         .room(toRoomDTO(room))
@@ -78,7 +75,14 @@ public class ChatWebSocketController {
                         .build())
                 .collect(Collectors.toList()));
 
-        return roomMessages;
+        final User user = chatService.fetchCurrentUser();
+
+        return InitialDataDTO.builder()
+                .roomMessagesList(roomMessagesList)
+                .exportedPublicKey(user.getExportedPublicKey())
+                .ivForPrivateKey(user.getIvForPrivateKey())
+                .wrappedPrivateKey(user.getWrappedPrivateKey())
+                .build();
     }
 
     private static RoomDTO toRoomDTO(@NonNull final Room room) {

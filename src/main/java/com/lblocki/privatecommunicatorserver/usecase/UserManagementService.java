@@ -7,6 +7,7 @@ import com.lblocki.privatecommunicatorserver.infrastructure.UserRepository;
 import com.lblocki.privatecommunicatorserver.utils.UserAlreadyExistException;
 import com.lblocki.privatecommunicatorserver.web.dto.RoomDTO;
 import com.lblocki.privatecommunicatorserver.web.dto.UserDTO;
+import com.lblocki.privatecommunicatorserver.web.request.UserRegisterRequest;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -30,20 +31,23 @@ public class UserManagementService {
     private final PasswordEncoder passwordEncoder;
     private final SimpMessagingTemplate simpMessagingTemplate;
 
-    public void registerUser(@NonNull final String username,
-                             @NonNull final String password) {
+    public void registerUser(@NonNull UserRegisterRequest request) {
 
-        validateUserNotExistingOrThrow(username);
+        validateUserNotExistingOrThrow(request.getUsername());
 
         final User newUser = new User();
-        newUser.setUsername(username);
-        newUser.setPassword(passwordEncoder.encode(password));
+        newUser.setUsername(request.getUsername());
+        newUser.setIvForPrivateKey(request.getIvForPrivateKey());
+        newUser.setIvForSymmetricKey(request.getIvForSymmetricKey());
+        newUser.setWrappedPrivateKey(request.getWrappedPrivateKey());
+        newUser.setExportedPublicKey(request.getExportedPublicKey());
+        newUser.setWrappedSymmetricKey(passwordEncoder.encode(request.getWrappedSymmetricKey()));
 
         final User createdUser = userRepository.save(newUser);
         final List<Room> newRoomList = new ArrayList<>();
 
         final Set<User> userSet = userRepository.findAll().stream()
-                .filter(val -> !val.getUsername().equals(username))
+                .filter(val -> !val.getUsername().equals(request.getUsername()))
                 .peek(user -> {
                     final Room newRoom = new Room();
                     newRoom.setUsers(Set.of(user, createdUser));
@@ -61,6 +65,11 @@ public class UserManagementService {
 
             simpMessagingTemplate.convertAndSendToUser(user.getUsername(), "/exchange/chat.room", room);
         });
+    }
+
+    public String getUserIvForWrappedSymmetricKey(final String username) {
+        validateUserExistOrThrow(username);
+        return userRepository.findByUsername(username).stream().map(User::getIvForSymmetricKey).findFirst().orElseThrow();
     }
 
     private static RoomDTO toRoomDTO(@NonNull final Room room) {
@@ -83,6 +92,14 @@ public class UserManagementService {
 
         if(user.isPresent()) {
             throw new UserAlreadyExistException("User " + username + " already exists");
+        }
+    }
+
+    private void validateUserExistOrThrow(final String username) {
+        final Optional<User> user = userRepository.findByUsername(username);
+
+        if(user.isEmpty()) {
+            throw new IllegalArgumentException("User " + username + " does not exists");
         }
     }
 }

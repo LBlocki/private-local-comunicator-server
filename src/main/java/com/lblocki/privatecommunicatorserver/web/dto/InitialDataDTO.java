@@ -1,17 +1,17 @@
-package com.lblocki.privatecommunicatorserver.web.request;
+package com.lblocki.privatecommunicatorserver.web.dto;
 
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
+import java.util.Collection;
+
 @Value
 @Builder
 @Jacksonized
-public class UserRegisterRequest {
-    String username;
+public class InitialDataDTO {
+    Collection<RoomMessagesDTO> roomMessagesList;
     String wrappedPrivateKey;
     String exportedPublicKey;
-    String wrappedSymmetricKey;
     String ivForPrivateKey;
-    String ivForSymmetricKey;
 }

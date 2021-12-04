@@ -56,6 +56,7 @@ public class HttpSecurityConfig extends WebSecurityConfigurerAdapter {
                 .authorizeRequests()
                 .mvcMatchers(HttpMethod.POST, SecurityUtils.REGISTRATION_HTTP_PATH).anonymous()
                 .antMatchers(HttpMethod.GET, SecurityUtils.HTTP_UPGRADE_PATH).anonymous()
+                .antMatchers(HttpMethod.GET, SecurityUtils.HTTP_LOGIN_IV_PATH).anonymous()
                 .anyRequest().authenticated()
                 .and()
                 .addFilterBefore(applicationHttpCorsFilter(), WebAsyncManagerIntegrationFilter.class)

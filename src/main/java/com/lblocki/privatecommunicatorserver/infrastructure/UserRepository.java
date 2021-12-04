@@ -13,4 +13,5 @@ public interface UserRepository extends CrudRepository<User, Long> {
     Set<User> findAll();
 
     Set<User> findAllByUsernameIn(final Set<String> username);
+
 }
