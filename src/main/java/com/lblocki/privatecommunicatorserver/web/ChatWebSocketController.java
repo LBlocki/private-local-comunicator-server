@@ -1,10 +1,12 @@
 package com.lblocki.privatecommunicatorserver.web;
 
 import com.lblocki.privatecommunicatorserver.domain.Message;
+import com.lblocki.privatecommunicatorserver.domain.MessageBody;
 import com.lblocki.privatecommunicatorserver.domain.Room;
 import com.lblocki.privatecommunicatorserver.domain.User;
 import com.lblocki.privatecommunicatorserver.usecase.ChatService;
 import com.lblocki.privatecommunicatorserver.web.dto.*;
+import com.lblocki.privatecommunicatorserver.web.dto.MessageDTO.MessageBodyDTO;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,11 +35,15 @@ public class ChatWebSocketController {
     public void filterPrivateMessage(@Payload MessageDTO message,
                                      @DestinationVariable("recipient") String recipient) throws IllegalAccessException {
 
-        final MessageDTO createdMessage =
-                ChatWebSocketController.messageDTO(chatService.persistMessage(message, recipient));
+        final String creatorUsername = SecurityContextHolder.getContext().getAuthentication().getName();
 
-        simpMessagingTemplate.convertAndSendToUser(recipient, "/exchange/chat.message", createdMessage);
-        simpMessagingTemplate.convertAndSendToUser(message.getCreatorUsername(), "/exchange/chat.message", createdMessage);
+        final MessageDTO createdMessage =
+                ChatWebSocketController.messageDTO(chatService.persistMessage(message, recipient, creatorUsername));
+
+        simpMessagingTemplate.convertAndSendToUser(recipient, "/exchange/chat.message",
+                ChatWebSocketController.filterMessageDTOToExcludeOtherBodies(createdMessage, recipient));
+        simpMessagingTemplate.convertAndSendToUser(creatorUsername, "/exchange/chat.message",
+                ChatWebSocketController.filterMessageDTOToExcludeOtherBodies(createdMessage, creatorUsername));
     }
 
     @MessageMapping("/chat.private.set.messages.read.{roomId}")
@@ -50,6 +56,7 @@ public class ChatWebSocketController {
     @SubscribeMapping("/chat.private.fetch.initial.data")
     public InitialDataDTO fetchRoomMessagesList() {
         final Collection<Room> rooms = chatService.fetchAllRooms();
+        final String username = SecurityContextHolder.getContext().getAuthentication().getName();
         final Collection<RoomMessagesDTO> roomMessagesList = chatService.fetchAllMessages().stream()
                 .collect(Collectors.groupingBy(Message::getRoom))
                 .entrySet()
@@ -58,6 +65,7 @@ public class ChatWebSocketController {
                         .room(toRoomDTO(entry.getKey()))
                         .messages(entry.getValue().stream()
                                 .map(ChatWebSocketController::messageDTO)
+                                .map(dto -> ChatWebSocketController.filterMessageDTOToExcludeOtherBodies(dto, username))
                                 .collect(Collectors.toList()))
                         .build())
                 .collect(Collectors.toList());
@@ -96,6 +104,21 @@ public class ChatWebSocketController {
         return UserDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
+                .encodedPublicKey(user.getExportedPublicKey())
+                .build();
+    }
+
+    private static MessageDTO filterMessageDTOToExcludeOtherBodies(@NonNull final MessageDTO messageDTO,
+                                                                   @NonNull final String username) {
+        return MessageDTO.builder()
+                .id(messageDTO.getId())
+                .readByRecipient(messageDTO.getReadByRecipient())
+                .messageBodies(messageDTO.getMessageBodies().stream()
+                        .filter(body -> username.equals(body.getRecipient()))
+                        .collect(Collectors.toSet()))
+                .creationDate(messageDTO.getCreationDate())
+                .roomId(messageDTO.getRoomId())
+                .creatorUsername(messageDTO.getCreatorUsername())
                 .build();
     }
 
@@ -103,10 +126,18 @@ public class ChatWebSocketController {
         return MessageDTO.builder()
                 .id(message.getId())
                 .roomId(message.getRoom().getId())
-                .body(message.getBody())
+                .messageBodies(message.getMessageBodies().stream()
+                        .map(ChatWebSocketController::toMessageBodyDTO)
+                        .collect(Collectors.toSet()))
                 .readByRecipient(Message.ReadByRecipient.Y.equals(message.getReadByRecipient()))
                 .creationDate(message.getCreationDate())
                 .creatorUsername(message.getCreator().getUsername())
+                .build();
+    }
+    private static MessageBodyDTO toMessageBodyDTO(@NonNull final MessageBody messageBody) {
+        return MessageBodyDTO.builder()
+                .recipient(messageBody.getRecipient())
+                .body(messageBody.getBody())
                 .build();
     }
 }

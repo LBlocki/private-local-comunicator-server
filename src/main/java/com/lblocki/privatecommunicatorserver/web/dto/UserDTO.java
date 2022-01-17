@@ -10,4 +10,5 @@ import lombok.extern.jackson.Jacksonized;
 public class UserDTO {
     Long id;
     String username;
+    String encodedPublicKey;
 }

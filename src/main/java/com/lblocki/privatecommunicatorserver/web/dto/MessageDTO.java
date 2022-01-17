@@ -5,6 +5,7 @@ import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
 
 import java.sql.Timestamp;
+import java.util.Collection;
 
 @Value
 @Builder
@@ -13,7 +14,15 @@ public class MessageDTO {
     Long id;
     String creatorUsername;
     Long roomId;
-    String body;
+    Collection<MessageBodyDTO> messageBodies;
     Boolean readByRecipient;
     Timestamp creationDate;
+
+    @Value
+    @Jacksonized
+    @Builder
+    public static class MessageBodyDTO {
+        String recipient;
+        String body;
+    }
 }

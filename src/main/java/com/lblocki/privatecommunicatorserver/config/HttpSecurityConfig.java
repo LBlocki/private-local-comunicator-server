@@ -40,7 +40,6 @@ public class HttpSecurityConfig extends WebSecurityConfigurerAdapter {
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        //todo FIX HTTPS AND CORS
         http
                 .headers()
                 .xssProtection()

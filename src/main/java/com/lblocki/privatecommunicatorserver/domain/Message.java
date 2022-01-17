@@ -4,6 +4,8 @@ import lombok.Data;
 
 import javax.persistence.*;
 import java.sql.Timestamp;
+import java.util.Collection;
+import java.util.HashSet;
 
 @Data
 @Entity
@@ -18,6 +20,9 @@ public class Message {
     @JoinColumn(name = "recipient_id", nullable = false)
     private User recipient;
 
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER, orphanRemoval = true)
+    private Collection<MessageBody> messageBodies = new HashSet<>();
+
     @ManyToOne
     @JoinColumn(name = "creator_id", nullable = false)
     private User creator;
@@ -29,9 +34,6 @@ public class Message {
     @Column(name = "read_by_recipient")
     @Enumerated(EnumType.STRING)
     private ReadByRecipient readByRecipient;
-
-    @Column(name = "body", nullable = false, length = 128)
-    private String body;
 
     @Column(name = "creation_date", nullable = false)
     private Timestamp creationDate;

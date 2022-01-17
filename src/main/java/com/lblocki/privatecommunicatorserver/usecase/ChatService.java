@@ -1,6 +1,7 @@
 package com.lblocki.privatecommunicatorserver.usecase;
 
 import com.lblocki.privatecommunicatorserver.domain.Message;
+import com.lblocki.privatecommunicatorserver.domain.MessageBody;
 import com.lblocki.privatecommunicatorserver.domain.Room;
 import com.lblocki.privatecommunicatorserver.domain.User;
 import com.lblocki.privatecommunicatorserver.infrastructure.MessageRepository;
@@ -35,7 +36,7 @@ public class ChatService {
 
     public void setMessagesAsRead(final Long roomId) throws IllegalAccessException {
 
-        if(Objects.isNull(roomId)) {
+        if (Objects.isNull(roomId)) {
             throw new IllegalArgumentException("Room id must be provided");
         }
 
@@ -67,35 +68,44 @@ public class ChatService {
 
     @Transactional
     public Message persistMessage(final MessageDTO messageDTO,
-                                  final String recipientUsername) throws IllegalAccessException {
+                                  final String recipientUsername,
+                                  final String creatorUsername) throws IllegalAccessException {
 
-         this.validateMessagePersistenceRequest(messageDTO, recipientUsername);
+        this.validateMessagePersistenceRequest(messageDTO, recipientUsername);
 
-         final String creatorUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-         final Set<User> users = userRepository.findAllByUsernameIn(Set.of(creatorUsername, recipientUsername));
-         final User creator = users.stream()
-                 .filter(user -> user.getUsername().equals(creatorUsername))
-                 .findFirst()
-                 .orElseThrow();
-         final Optional<User> recipient = users.stream()
-                 .filter(user -> user.getUsername().equals(recipientUsername))
-                 .findFirst();
+        final Set<User> users = userRepository.findAllByUsernameIn(Set.of(creatorUsername, recipientUsername));
 
-         if(recipient.isEmpty()) {
-             throw new IllegalArgumentException("Recipient should exist");
-         }
+        final User creator = users.stream()
+                .filter(user -> user.getUsername().equals(creatorUsername))
+                .findFirst()
+                .orElseThrow();
+        final User recipient = users.stream()
+                .filter(user -> user.getUsername().equals(recipientUsername))
+                .findFirst()
+                .orElseThrow();
 
-         final Room room = validateAccessIfRoomExist(messageDTO.getRoomId(), creator, recipient.get());
+        final Room room = validateAccessIfRoomExist(messageDTO.getRoomId(), creator, recipient);
 
-         final Message message = new Message();
-         message.setBody(messageDTO.getBody());
-         message.setCreationDate(Timestamp.from(LocalDateTime.now().toInstant(ZoneOffset.UTC)));
-         message.setRecipient(recipient.get());
-         message.setReadByRecipient(null);
-         message.setRoom(room);
-         message.setCreator(creator);
+        final Message messageToPersist = new Message();
+        messageToPersist.setCreationDate(Timestamp.from(LocalDateTime.now().toInstant(ZoneOffset.UTC)));
+        messageToPersist.setRecipient(recipient);
+        messageToPersist.setReadByRecipient(null);
+        messageToPersist.setRoom(room);
+        messageToPersist.setCreator(creator);
 
-         return messageRepository.save(message);
+        final Message createdMessage = messageRepository.save(messageToPersist);
+
+        final Collection<MessageBody> messageBodies = messageDTO.getMessageBodies().stream().map(mb -> {
+            final MessageBody messageBody = new MessageBody();
+            messageBody.setRecipient(mb.getRecipient());
+            messageBody.setBody(mb.getBody());
+            return messageBody;
+        }).collect(Collectors.toSet());
+
+
+        createdMessage.setMessageBodies(messageBodies);
+
+        return messageRepository.save(createdMessage);
     }
 
     private Room validateAccessIfRoomExist(@NonNull final Long roomId,
@@ -104,7 +114,7 @@ public class ChatService {
 
         final Optional<Room> existingRoom = roomRepository.findById(roomId);
 
-        if(existingRoom.isEmpty()) {
+        if (existingRoom.isEmpty()) {
             throw new IllegalArgumentException("Provided room does not exist");
         }
 
@@ -113,7 +123,7 @@ public class ChatService {
                 .collect(Collectors.toSet())
                 .containsAll(Set.of(creator.getUsername(), recipient.getUsername()));
 
-        if(!hasAccess) {
+        if (!hasAccess) {
             throw new IllegalAccessException("One or more users specified in message" +
                     " does not have access to specified room");
         }
@@ -126,7 +136,7 @@ public class ChatService {
 
         final Optional<Room> existingRoom = roomRepository.findById(roomId);
 
-        if(existingRoom.isEmpty()) {
+        if (existingRoom.isEmpty()) {
             throw new IllegalArgumentException("Provided room does not exist");
         }
 
@@ -135,7 +145,7 @@ public class ChatService {
                 .collect(Collectors.toSet())
                 .contains(recipient);
 
-        if(!hasAccess) {
+        if (!hasAccess) {
             throw new IllegalAccessException("One or more users specified in message" +
                     " does not have access to specified room");
         }
@@ -145,7 +155,11 @@ public class ChatService {
         try {
             Validate.notBlank(recipientUsername);
             Validate.notNull(messageDTO);
-            Validate.notBlank(messageDTO.getBody());
+            Validate.notEmpty(messageDTO.getMessageBodies());
+            messageDTO.getMessageBodies().forEach(body -> {
+                Validate.notBlank(body.getRecipient());
+                Validate.notBlank(body.getBody());
+            });
             Validate.notBlank(messageDTO.getCreatorUsername());
             Validate.notNull(messageDTO.getRoomId());
             Validate.isTrue(Objects.isNull(messageDTO.getReadByRecipient()));
